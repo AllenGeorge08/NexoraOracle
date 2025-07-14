@@ -55,8 +55,6 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
     uint256 public lastValidationTime;
     uint256 public validationInterval = 3600; //1 hour default
     uint256 public validationThreshold;
-    uint256 randomSamplingWindow;
-    // uint256 public validationInterval= 3600; //1 hour default
     mapping(uint256 => uint256) requestIdToTimestamp;
     mapping(uint256 => address[]) requestIdToAssets; //Tracks which assets are being validated
     mapping(uint256 => mapping(address => uint256)) requestIdToAssetPrice; //Store prices for validation
@@ -94,7 +92,6 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
         uint256 _emaExpTime,
         uint256 _maxPriceDeviation,
         uint256 _validationThreshold,
-        uint256 _randomSamplingWindow,
         uint32 _callBackGasLimit,
         uint16 _requestConfirmations,
         address _sequencerUptimeFeed //Pass address(0) for l1 networks
@@ -106,7 +103,6 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
         EMA_EXPTime = _emaExpTime;
         maxPriceDeviation = _maxPriceDeviation;
         validationThreshold = _validationThreshold;
-        randomSamplingWindow = _randomSamplingWindow;
         callBackGasLimit = _callBackGasLimit;
         REQUEST_CONFIRMATIONS = _requestConfirmations;
 
@@ -297,7 +293,8 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
         emit SequencerStatusChecked(isSequencerUp, timeSinceUp);
     }
 
-    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal virtual  {
+    // Raw fulfill words function is called by the vrf which in calls this function internally
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal virtual {
         if (randomWords.length == 0) {
             revert InvalidRandomness();
         }
