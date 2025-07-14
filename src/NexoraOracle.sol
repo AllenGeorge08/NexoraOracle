@@ -48,7 +48,7 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
     // L2 Sequencer Parameters
     AggregatorV2V3Interface public immutable sequencerUptimeFeed;
     uint256 public GRACE_PERIOD_TIME = 3600;
-    uint256 public SEQUENCER_FEED_HEARTBEAT = 86400; 
+    uint256 public SEQUENCER_FEED_HEARTBEAT = 86400;
     bool public immutable isL2;
 
     //Validation parameters
@@ -113,7 +113,6 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
             sequencerUptimeFeed = AggregatorV2V3Interface(address(0));
             isL2 = false;
         }
-
 
         isInitialized = true;
     }
