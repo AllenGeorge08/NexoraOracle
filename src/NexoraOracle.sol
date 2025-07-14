@@ -48,7 +48,7 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
     // L2 Sequencer Parameters
     AggregatorV2V3Interface public immutable sequencerUptimeFeed;
     uint256 public GRACE_PERIOD_TIME = 3600;
-    uint256 public SEQUENCER_FEED_HEARTBEAT = 86400; //q Is this correct
+    uint256 public SEQUENCER_FEED_HEARTBEAT = 86400; 
     bool public immutable isL2;
 
     //Validation parameters
@@ -113,6 +113,7 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
             sequencerUptimeFeed = AggregatorV2V3Interface(address(0));
             isL2 = false;
         }
+
 
         isInitialized = true;
     }
@@ -217,11 +218,6 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
         }
     }
 
-    // //Called by the vrf (callback) when random price validation is requested..
-    // function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external virtual {
-    //     _fulfillRandomWords(requestId, randomWords);
-    // }
-
     function _requestRandomValidation(address[] memory assetsToValidate) internal {
         // Storing the current prices
         uint256 requestId = s_vrfCoordinator.requestRandomWords(
@@ -294,16 +290,15 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
     }
 
     // Raw fulfill words function is called by the vrf which in calls this function internally
-    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal virtual {
-        if (randomWords.length == 0) {
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWordsArray) internal virtual override {
+        if (randomWordsArray.length == 0) {
             revert InvalidRandomness();
         }
 
         uint256 requestTime = requestIdToTimestamp[requestId];
         require(requestTime > 0, "Invalid request ID");
 
-        // Check if the random validation should proceed based on sampling window
-        uint256 randomValue = randomWords[0];
+        uint256 randomValue = randomWordsArray[0];
         bool shouldValidate = _shouldValidateBasedOnRandomness(randomValue, requestTime);
 
         address[] memory assetsToValidate = requestIdToAssets[requestId];
