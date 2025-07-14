@@ -47,13 +47,16 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
 
     // L2 Sequencer Parameters
     AggregatorV2V3Interface public immutable sequencerUptimeFeed;
-    uint256 public GRACE_PERIOD_TIME = 3600; 
+    uint256 public GRACE_PERIOD_TIME = 3600;
     uint256 public SEQUENCER_FEED_HEARTBEAT = 86400; //q Is this correct
     bool public immutable isL2;
 
     //Validation parameters
+    uint256 public lastValidationTime;
+    uint256 public validationInterval = 3600; //1 hour default
     uint256 public validationThreshold;
     uint256 randomSamplingWindow;
+    // uint256 public validationInterval= 3600; //1 hour default
     mapping(uint256 => uint256) requestIdToTimestamp;
     mapping(uint256 => address[]) requestIdToAssets; //Tracks which assets are being validated
     mapping(uint256 => mapping(address => uint256)) requestIdToAssetPrice; //Store prices for validation
@@ -140,6 +143,30 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
             priceFeed: AggregatorV3Interface(_priceFeed),
             decimals: decimals
         });
+
+        assetList.push(_assetAddress);
+    }
+
+    function updateAssetPrice(address assetAddr) external {
+        require(!assets[assetAddr].isDeprecated, "Asset is deprecated");
+
+        // //If asset has a pending validation,wait for it
+        if (assets[assetAddr].lastRequestId != 0) {
+            return;
+        }
+
+        // // Get current price
+        uint256 currentPrice = _getValidatedPrice(address(assets[assetAddr].priceFeed), assets[assetAddr].decimals);
+
+        // If price isn't within the deviation range validation will be triggered
+        if (!isPriceWithinDeviation(currentPrice, assets[assetAddr].price)) {
+            // Trigger validation for this asset
+            address[] memory singleAsset = new address[](1);
+            singleAsset[0] = assetAddr;
+            _requestRandomValidation(singleAsset);
+        } else {
+            _updateAssetPrice(assetAddr, currentPrice);
+        }
     }
 
     function calculateEMAPrice(address assetAddr) public view returns (uint256) {
@@ -167,6 +194,37 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
         SD59x18 decayTime = sd(int256((timeDelta * 1e18) / EMA_EXPTime) * -1);
         return uint256(exp(decayTime).unwrap());
     }
+
+    // Meant to be called by validators/users to trigger priceValidation on a constant basis, can be automated..
+    function requestPriceValidation() external {
+        require(block.timestamp >= lastValidationTime + validationInterval, "Too soon for validation");
+        require(assetList.length > 0, "No assets to validate");
+
+        address[] memory assetsToValidate = new address[](assetList.length);
+        uint256 validAssetCount = 0;
+
+        for (uint256 index = 0; index < assetList.length; index++) {
+            if (!assets[assetList[index]].isDeprecated) {
+                assetsToValidate[validAssetCount] = assetList[index];
+                validAssetCount++;
+            }
+        }
+
+        address[] memory finalAssets = new address[](validAssetCount);
+        for (uint256 index = 0; index < validAssetCount; index++) {
+            finalAssets[index] = assetsToValidate[index];
+        }
+
+        if (finalAssets.length > 0) {
+            _requestRandomValidation(finalAssets);
+            lastValidationTime = block.timestamp;
+        }
+    }
+
+    // //Called by the vrf (callback) when random price validation is requested..
+    // function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external virtual {
+    //     _fulfillRandomWords(requestId, randomWords);
+    // }
 
     function _requestRandomValidation(address[] memory assetsToValidate) internal {
         // Storing the current prices
@@ -239,8 +297,7 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
         emit SequencerStatusChecked(isSequencerUp, timeSinceUp);
     }
 
-    //It's called by the vrf
-    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external virtual override {
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal virtual  {
         if (randomWords.length == 0) {
             revert InvalidRandomness();
         }
@@ -293,6 +350,7 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
         return deviation <= maxPriceDeviation;
     }
 
+    //INTERNAL FUNCTIONS
     function _updateAssetPrice(address assetAddr, uint256 newPrice) internal {
         Asset storage asset = assets[assetAddr];
 
@@ -327,12 +385,6 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
 
     //  Determines whether to perform the validation or not
     function _shouldValidateBasedOnRandomness(uint256 randomValue, uint256 requestTime) internal view returns (bool) {
-        // To check if the timeElapsed surpasses the sampling window
-        uint256 timeElapsed = block.timestamp - requestTime;
-        if (timeElapsed > randomSamplingWindow) {
-            return false;
-        }
-
         return (randomValue % 100) < validationThreshold;
     }
 
@@ -387,5 +439,9 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
 
     function setSequencerHeartbeat(uint256 _hearbeat) external onlyOwner {
         SEQUENCER_FEED_HEARTBEAT = _hearbeat;
+    }
+
+    function setValidationInterval(uint256 _interval) external onlyOwner {
+        validationInterval = _interval;
     }
 }
