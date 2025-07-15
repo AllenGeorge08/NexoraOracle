@@ -143,6 +143,7 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
         assetList.push(_assetAddress);
     }
 
+    // Will be automated
     function updateAssetPrice(address assetAddr) external {
         require(!assets[assetAddr].isDeprecated, "Asset is deprecated");
 
@@ -281,10 +282,7 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
 
         // Grace period check
         uint256 timeSinceUp = block.timestamp - startedAt;
-        if (timeSinceUp <= GRACE_PERIOD_TIME) {
-            revert GracePeriodNotOver();
-        }
-
+        require(timeSinceUp <= GRACE_PERIOD_TIME, "Grace Period is not over");
         emit SequencerStatusChecked(isSequencerUp, timeSinceUp);
     }
 
@@ -408,7 +406,7 @@ contract NexoraOracle is VRFConsumerBaseV2Plus {
     }
 
     function getAssetAtIndex(uint256 index) external view returns (address) {
-        require(index < assetList.length, "Index out of bounds");
+        require(index <= assetList.length, "Index out of bounds");
         return assetList[index];
     }
 
